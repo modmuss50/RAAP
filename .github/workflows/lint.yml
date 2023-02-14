@@ -1,0 +1,10 @@
+name: Build
+on: [push, pull_request]
+jobs:
+  lint:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup-rust
+      - run: cargo fmt
+      - run: cargo clippy -- -Dwarnings

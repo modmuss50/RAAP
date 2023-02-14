@@ -1,0 +1,12 @@
+name: Setup Rust
+description: Install rust, and configure cache
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions-rs/toolchain@v1
+      with:
+        profile: default
+        toolchain: 1.65.0
+        override: true
+    - uses: Swatinem/rust-cache@v2
