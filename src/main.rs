@@ -1,5 +1,4 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-#![warn(clippy::pedantic)]
 
 use std::sync::mpsc;
 use std::thread;

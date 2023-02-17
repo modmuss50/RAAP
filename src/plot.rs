@@ -32,10 +32,11 @@ pub fn plot(
         .show(ui, |plot_ui| {
             let mut series: Vec<[f64; 2]> = vec![];
             for point in points.iter().rev() {
-                let seconds_ago = match data_x_age.duration_since(point.time) {
-                    Ok(n) => u32::try_from(n.as_millis() / 1000).unwrap(),
+                let millis_ago = match data_x_age.duration_since(point.time) {
+                    Ok(n) => n.as_millis(),
                     Err(_) => continue, // Scrolled out out of view
                 };
+                let seconds_ago = u32::try_from(millis_ago / 1000).unwrap();
 
                 if seconds_ago > settings.max_display_age {
                     break;
@@ -45,7 +46,7 @@ pub fn plot(
                     continue;
                 }
 
-                series.push([-f64::from(seconds_ago), f64::from(point.height)]);
+                series.push([-(millis_ago as f64 / 1000.0), f64::from(point.height)]);
             }
 
             let points = Points::new(PlotPoints::new(series))

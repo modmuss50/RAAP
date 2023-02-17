@@ -4,6 +4,7 @@ use std::cmp::min;
 use std::default::Default;
 use std::ops::Sub;
 use std::sync::mpsc;
+use std::thread;
 use std::time::{Duration, SystemTime};
 use thousands::Separable;
 
@@ -102,8 +103,6 @@ impl Plotter {
         let start = SystemTime::now();
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            // TODO can we only do this when we have new data?
-            ui.ctx().request_repaint_after(Duration::from_millis(25));
             self.recv();
             self.handle_key_press(ctx);
 
@@ -135,21 +134,19 @@ impl Plotter {
                         ui.spinner();
                     }
                     adsb::ConnectionState::Connected => {
-                        if ui.button("Disconnect").clicked() {
-                            todo!()
-                        }
-
-                        if points_len > 0 && ui.button("Save").clicked() {
-                            if let Err(e) = data::write(
-                                "data.raap",
-                                data::Plot {
-                                    points: self.points.clone(),
-                                },
-                            ) {
-                                eprintln!("Failed to write: {e}");
-                            }
-                        }
+                        ui.ctx().request_repaint_after(Duration::from_millis(25));
+                        // if ui.button("Disconnect").clicked() {
+                        //     todo!()
+                        // }
                     }
+                }
+
+                if points_len > 0 && ui.button("Save").clicked() {
+                    let points_copy = self.points.clone();
+
+                    thread::spawn(|| {
+                        save_historical(points_copy);
+                    });
                 }
 
                 ui.label(format!("Points: {:}", points_len.separate_with_commas()));
@@ -183,7 +180,7 @@ impl Plotter {
                             0..=u32::try_from(
                                 max_offset - u64::from(self.settings.max_display_age),
                             )
-                            .unwrap(),
+                                .unwrap(),
                         ));
                     });
 
@@ -215,11 +212,18 @@ impl Plotter {
     }
 
     fn load_historical(&mut self) {
-        let result = match data::read("data.raap") {
+        let default_path = default_file_path();
+        let file_path = tinyfiledialogs::open_file_dialog("Open Data file", &default_path, None);
+
+        if file_path.is_none() {
+            return;
+        }
+
+        let result = match data::read(file_path.unwrap().as_str()) {
             Ok(plot) => Some(plot),
             Err(e) => {
                 eprintln!("Unable to read plot: {e}");
-                None
+                return;
             }
         };
 
@@ -230,10 +234,18 @@ impl Plotter {
         }
 
         if self.points.is_empty() {
-            todo!();
+            todo!()
         }
 
-        self.points = denoise(&self.points);
+        if tinyfiledialogs::message_box_yes_no(
+            "Plotter",
+            "Run de-nosing algorithm on imported data?",
+            tinyfiledialogs::MessageBoxIcon::Question,
+            tinyfiledialogs::YesNo::No,
+        ) == tinyfiledialogs::YesNo::Yes
+        {
+            self.points = denoise(&self.points);
+        }
 
         let oldest_point = self
             .points
@@ -259,6 +271,33 @@ impl Plotter {
             self.settings.max_display_age += 60;
         }
     }
+}
+
+fn save_historical(points: Vec<data::Point>) {
+    let default_path = default_file_path();
+    let file_path = tinyfiledialogs::save_file_dialog("Open Data file", &default_path);
+
+    if file_path.is_none() {
+        return;
+    }
+
+    if let Err(e) = data::write(
+        file_path.unwrap().as_str(),
+        data::Plot {
+            points,
+        },
+    ) {
+        eprintln!("Failed to write: {e}");
+    }
+}
+
+fn default_file_path() -> String {
+    std::env::current_dir()
+        .unwrap()
+        .into_os_string()
+        .into_string()
+        .unwrap()
+        + "/data.raap"
 }
 
 impl eframe::App for Plotter {

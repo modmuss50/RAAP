@@ -41,8 +41,8 @@ fn should_apply_point(index: usize, point: &data::Point, points: &[data::Point])
 }
 
 fn time_diff(a: &SystemTime, b: &SystemTime) -> u64 {
-    let time_a = a.duration_since(UNIX_EPOCH).unwrap().as_secs() as u64;
-    let time_b = b.duration_since(UNIX_EPOCH).unwrap().as_secs() as u64;
+    let time_a = a.duration_since(UNIX_EPOCH).unwrap().as_secs();
+    let time_b = b.duration_since(UNIX_EPOCH).unwrap().as_secs();
 
     time_a.abs_diff(time_b)
 }

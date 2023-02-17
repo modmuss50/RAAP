@@ -1,5 +1,8 @@
+use flate2::read::ZlibDecoder;
+use flate2::write::ZlibEncoder;
+use flate2::Compression;
 use std::fs::File;
-use std::io::{BufReader, BufWriter, Read, Write};
+use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const HEADER: &[u8] = &[0xd, 0x1, 0xa, 0x0];
@@ -17,7 +20,8 @@ pub struct Plot {
 
 pub fn write(path: &str, plot: Plot) -> Result<(), Box<dyn std::error::Error>> {
     let file = File::create(path)?;
-    let mut writer = BufWriter::new(file);
+    let file_writer = BufWriter::new(file);
+    let mut writer = ZlibEncoder::new(file_writer, Compression::fast());
 
     // Header
     writer.write_all(HEADER)?;
@@ -32,15 +36,32 @@ pub fn write(path: &str, plot: Plot) -> Result<(), Box<dyn std::error::Error>> {
         writer.write_all(&time.to_be_bytes())?;
     }
 
+    writer.flush()?;
+
     Ok(())
 }
 
 pub fn read(path: &str) -> Result<Plot, Box<dyn std::error::Error>> {
     let file = File::open(path)?;
-    let mut reader = BufReader::new(file);
+    let mut file_reader = BufReader::new(file);
 
-    let mut file_header = [0; 4];
-    reader.read_exact(&mut file_header)?;
+    // Read the first byte of the file
+    let mut first_byte = [0; 1];
+    file_reader.read_exact(&mut first_byte)?;
+    file_reader.seek(SeekFrom::Start(0))?;
+
+    let mut reader: Box<dyn Read> = if first_byte[0] == HEADER[0] {
+        Box::new(file_reader)
+    } else {
+        Box::new(ZlibDecoder::new(file_reader))
+    };
+
+    let mut byte_header = [0; 4];
+    reader.read_exact(&mut byte_header)?;
+
+    if byte_header != HEADER {
+        return Err("Unexpected file header".into());
+    }
 
     let mut size_buf = [0; 4];
     reader.read_exact(&mut size_buf)?;
